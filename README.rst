@@ -64,23 +64,24 @@ Call ``launch_editor()`` with a filename, and optionally a line and column:
 API
 ---
 
-``launch_editor(filename, line=None, column=None, *, editor=None)``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``launch_editor(filename, line=None, column=None, *, editor=None, terminal=True)``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Open ``filename`` in the user’s editor, at ``line`` and ``column`` if given, and return the editor’s ``subprocess.Popen`` object.
 
-The editor is picked by ``guess_editor()``, passing it ``editor``.
+The editor is picked by ``guess_editor()``, passing it ``editor`` and ``terminal``.
 
 GUI editors start in the background, and the function returns immediately.
 If a GUI editor exits with an error, a warning is logged to the ``launch_editor`` logger.
 
 Terminal editors, like Vim, take over the current terminal until they exit.
 While one is open, further attempts to open a terminal editor raise ``LaunchEditorError``.
+Pass ``terminal=False`` to never open terminal editors, such as from a web server whose terminal shows its logs.
 
 Raises ``LaunchEditorError`` if the file does not exist, no editor is found, or the editor cannot be run.
 
-``guess_editor(editor=None)``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``guess_editor(editor=None, *, terminal=True)``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Return the command for the user’s editor, as a list of strings, or an empty list if none is found.
 The editor is chosen from, in order:
@@ -90,6 +91,10 @@ The editor is chosen from, in order:
 3. A supported editor that is currently running, on macOS, Linux, and Windows.
 4. The ``VISUAL`` environment variable.
 5. The ``EDITOR`` environment variable.
+
+If ``terminal`` is false, terminal editors are skipped, moving on to the next option.
+For example, if ``LAUNCH_EDITOR`` is ``vim`` and VS Code is running, VS Code is chosen.
+Terminal editors are Emacs, Helix, micro, nano, Neovim, vi, and Vim.
 
 ``LAUNCH_EDITOR`` is shared with the launch-editor npm package, so you can set it once for both.
 Like there, it’s treated as a single command, not split into arguments.

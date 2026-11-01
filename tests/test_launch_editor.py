@@ -31,7 +31,7 @@ def clean_state(monkeypatch):
 
 @pytest.fixture
 def no_running_editor(monkeypatch):
-    monkeypatch.setattr(le, "_guess_running_editor", lambda: None)
+    monkeypatch.setattr(le, "_guess_running_editor", lambda **kwargs: None)
 
 
 @pytest.fixture
@@ -62,16 +62,16 @@ class TestGuessEditor:
 
     def test_editor_beats_everything(self, monkeypatch):
         monkeypatch.setenv("LAUNCH_EDITOR", "zed")
-        monkeypatch.setattr(le, "_guess_running_editor", lambda: "subl")
+        monkeypatch.setattr(le, "_guess_running_editor", lambda **kwargs: "subl")
         assert guess_editor("code") == ["code"]
 
     def test_launch_editor_env(self, monkeypatch):
         monkeypatch.setenv("LAUNCH_EDITOR", "/path/to/my script.sh")
-        monkeypatch.setattr(le, "_guess_running_editor", lambda: "subl")
+        monkeypatch.setattr(le, "_guess_running_editor", lambda **kwargs: "subl")
         assert guess_editor() == ["/path/to/my script.sh"]
 
     def test_running(self, monkeypatch):
-        monkeypatch.setattr(le, "_guess_running_editor", lambda: "zed")
+        monkeypatch.setattr(le, "_guess_running_editor", lambda **kwargs: "zed")
         monkeypatch.setenv("VISUAL", "vim")
         assert guess_editor() == ["zed"]
 
@@ -86,6 +86,48 @@ class TestGuessEditor:
 
     def test_none(self, no_running_editor):
         assert guess_editor() == []
+
+    def test_blank_visual(self, monkeypatch, no_running_editor):
+        monkeypatch.setenv("VISUAL", " ")
+        monkeypatch.setenv("EDITOR", "vim")
+        assert guess_editor() == []
+
+    def test_no_terminal_gui_editor(self, no_running_editor):
+        assert guess_editor("code", terminal=False) == ["code"]
+
+    def test_no_terminal_skips_editor(self, monkeypatch, no_running_editor):
+        monkeypatch.setenv("EDITOR", "code --wait")
+        assert guess_editor("/usr/bin/nvim -p", terminal=False) == ["code", "--wait"]
+
+    def test_no_terminal_skips_launch_editor_env(self, monkeypatch):
+        monkeypatch.setenv("LAUNCH_EDITOR", "nano")
+        monkeypatch.setattr(le, "_guess_running_editor", lambda **kwargs: "zed")
+        assert guess_editor(terminal=False) == ["zed"]
+
+    def test_no_terminal_running(self, monkeypatch):
+        calls = []
+
+        def fake_guess_running_editor(**kwargs):
+            calls.append(kwargs)
+            return None
+
+        monkeypatch.setattr(le, "_guess_running_editor", fake_guess_running_editor)
+        assert guess_editor(terminal=False) == []
+        assert calls == [{"terminal": False}]
+
+    def test_no_terminal_skips_visual(self, monkeypatch, no_running_editor):
+        monkeypatch.setenv("VISUAL", "vim")
+        monkeypatch.setenv("EDITOR", "subl -w")
+        assert guess_editor(terminal=False) == ["subl", "-w"]
+
+    def test_no_terminal_none(self, monkeypatch, no_running_editor):
+        monkeypatch.setenv("VISUAL", "vim")
+        monkeypatch.setenv("EDITOR", "nano")
+        assert guess_editor(terminal=False) == []
+
+    def test_no_terminal_blank_visual(self, monkeypatch, no_running_editor):
+        monkeypatch.setenv("VISUAL", " ")
+        assert guess_editor(terminal=False) == []
 
 
 class TestGuessRunningEditor:
@@ -107,6 +149,11 @@ class TestGuessRunningEditor:
         with self.run_result("bash\ncode\n") as run:
             assert le._guess_running_editor() == "code"
         assert run.call_args.args[0][:2] == ["ps", "x"]
+
+    def test_linux_no_terminal(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        with self.run_result("bash\nvim\nzed\n"):
+            assert le._guess_running_editor(terminal=False) == "zed"
 
     def test_windows(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "win32")
@@ -189,6 +236,17 @@ class TestEditorFromLinuxProcesses:
 
     def test_none(self):
         assert le._editor_from_linux_processes("systemd\nbash\nsshd\n") is None
+
+    def test_terminal(self):
+        assert le._editor_from_linux_processes("vim\nzed\n") == "vim"
+
+    def test_no_terminal(self):
+        output = "vim\nzed\n"
+        assert le._editor_from_linux_processes(output, terminal=False) == "zed"
+
+    def test_no_terminal_none(self):
+        output = "emacs\nvim\n"
+        assert le._editor_from_linux_processes(output, terminal=False) is None
 
 
 class TestPositionArgs:
@@ -356,6 +414,29 @@ class TestLaunchEditor:
     def test_no_editor(self, popen, example_file, no_running_editor):
         with pytest.raises(LaunchEditorError, match="Could not find an editor"):
             launch_editor(example_file)
+        popen.assert_not_called()
+
+    def test_no_terminal(self, popen, example_file, monkeypatch, no_running_editor):
+        monkeypatch.setenv("VISUAL", "vim")
+        monkeypatch.setenv("EDITOR", "zed")
+
+        launch_editor(example_file, 12, terminal=False)
+
+        assert popen.call_args.args[0] == [
+            shutil.which("zed") or "zed",
+            f"{example_file}:12:1",
+        ]
+        assert le._terminal_editor is None
+
+    def test_no_terminal_no_editor(
+        self, popen, example_file, monkeypatch, no_running_editor
+    ):
+        monkeypatch.setenv("EDITOR", "vim")
+
+        with pytest.raises(
+            LaunchEditorError, match="Could not find a non-terminal editor"
+        ):
+            launch_editor(example_file, terminal=False)
         popen.assert_not_called()
 
     def test_editor_not_found(self, example_file):

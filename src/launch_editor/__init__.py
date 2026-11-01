@@ -16,6 +16,7 @@ Released under the MIT License, see the LICENSE file.
 
 from __future__ import annotations
 
+import functools
 import logging
 import ntpath
 import os
@@ -26,7 +27,7 @@ import shutil
 import subprocess
 import sys
 import threading
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from pathlib import Path, PureWindowsPath
 
 __all__ = [
@@ -187,7 +188,11 @@ WINDOWS_EDITORS = [
 TERMINAL_EDITORS = {"emacs", "hx", "micro", "nano", "nvim", "vi", "vim"}
 
 
-def guess_editor(editor: str | Sequence[str] | None = None) -> list[str]:
+def guess_editor(
+    editor: str | Sequence[str] | None = None,
+    *,
+    terminal: bool = True,
+) -> list[str]:
     """
     Return the command for the user’s editor, or an empty list if none is
     found.
@@ -199,35 +204,49 @@ def guess_editor(editor: str | Sequence[str] | None = None) -> list[str]:
     3. A supported editor that is currently running.
     4. The ``VISUAL`` environment variable.
     5. The ``EDITOR`` environment variable.
+
+    If ``terminal`` is false, terminal editors are skipped.
     """
+    for command in _candidate_editors(editor, terminal):
+        if terminal or not command or not _is_terminal_editor(command[0]):
+            return command
+    return []
+
+
+def _candidate_editors(
+    editor: str | Sequence[str] | None, terminal: bool
+) -> Generator[list[str]]:
     if editor:
         if isinstance(editor, str):
-            return _split_command(editor)
-        return list(editor)
+            yield _split_command(editor)
+        else:
+            yield list(editor)
 
     launch_editor_env = os.environ.get("LAUNCH_EDITOR")
     if launch_editor_env:
         # Like the npm package, treat this as a single command, which is often
         # a script that receives the file, line, and column.
-        return [launch_editor_env]
+        yield [launch_editor_env]
 
-    running = _guess_running_editor()
+    running = _guess_running_editor(terminal=terminal)
     if running is not None:
-        return [running]
+        yield [running]
 
     for var in ("VISUAL", "EDITOR"):
         value = os.environ.get(var)
         if value:
-            return _split_command(value)
+            yield _split_command(value)
 
-    return []
+
+def _is_terminal_editor(command: str) -> bool:
+    return Path(command).name in TERMINAL_EDITORS
 
 
 def _split_command(command: str) -> list[str]:
     return shlex.split(command, posix=(sys.platform != "win32"))
 
 
-def _guess_running_editor() -> str | None:
+def _guess_running_editor(*, terminal: bool = True) -> str | None:
     if sys.platform == "darwin":
         args = ["ps", "x", "-o", "comm="]
         parse = _editor_from_macos_processes
@@ -247,7 +266,8 @@ def _guess_running_editor() -> str | None:
         parse = _editor_from_windows_processes
     elif sys.platform == "linux":
         args = ["ps", "x", "--no-heading", "-o", "comm", "--sort=comm"]
-        parse = _editor_from_linux_processes
+        # Only the Linux list includes terminal editors.
+        parse = functools.partial(_editor_from_linux_processes, terminal=terminal)
     else:
         return None
 
@@ -293,10 +313,10 @@ def _editor_from_windows_processes(output: str) -> str | None:
     return None
 
 
-def _editor_from_linux_processes(output: str) -> str | None:
+def _editor_from_linux_processes(output: str, *, terminal: bool = True) -> str | None:
     processes = set(output.split())
     for process_name, command in LINUX_EDITORS.items():
-        if process_name in processes:
+        if process_name in processes and (terminal or not _is_terminal_editor(command)):
             return command
     return None
 
@@ -399,12 +419,14 @@ def launch_editor(
     column: int | None = None,
     *,
     editor: str | Sequence[str] | None = None,
+    terminal: bool = True,
 ) -> subprocess.Popen[bytes]:
     """
     Open ``filename`` in the user’s editor, at ``line`` and ``column`` if
     given.
 
-    The editor is picked by :func:`guess_editor`, using ``editor`` if given.
+    The editor is picked by :func:`guess_editor`, using ``editor`` and
+    ``terminal``.
     GUI editors are started in the background and this function returns
     immediately. Terminal editors, like Vim, take over the current terminal;
     while one is open, further calls to open a terminal editor fail.
@@ -431,7 +453,12 @@ def launch_editor(
     if not os.path.exists(filename):
         raise LaunchEditorError(f"File does not exist: {filename}")
 
-    command = guess_editor(editor)
+    command = guess_editor(editor, terminal=terminal)
+    if not command and not terminal:
+        raise LaunchEditorError(
+            "Could not find a non-terminal editor. Set the LAUNCH_EDITOR "
+            + "environment variable to a GUI editor."
+        )
     if not command:
         raise LaunchEditorError(
             "Could not find an editor. Set the LAUNCH_EDITOR, VISUAL, or EDITOR "
@@ -456,7 +483,7 @@ def launch_editor(
         args.append(filename)
 
     with _terminal_editor_lock:
-        is_terminal = Path(editor_command).name in TERMINAL_EDITORS
+        is_terminal = _is_terminal_editor(editor_command)
         if is_terminal and _terminal_editor is not None:
             if _terminal_editor.poll() is None:
                 raise LaunchEditorError(

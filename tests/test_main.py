@@ -15,7 +15,7 @@ from launch_editor.__main__ import main
 def clean_env(monkeypatch):
     for var in ("LAUNCH_EDITOR", "VISUAL", "EDITOR"):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setattr(le, "_guess_running_editor", lambda: None)
+    monkeypatch.setattr(le, "_guess_running_editor", lambda **kwargs: None)
 
 
 def test_help_subprocess():
