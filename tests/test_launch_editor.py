@@ -370,6 +370,10 @@ class TestPositionArgs:
         monkeypatch.setenv("LAUNCH_EDITOR", "my-script")
         assert position_args("my-script", "file", 10, 5) == ["file", "10", "5"]
 
+    def test_unknown_with_other_launch_editor_env(self, monkeypatch):
+        monkeypatch.setenv("LAUNCH_EDITOR", "my-script")
+        assert position_args("unknown", "file", 10, 5) == ["file"]
+
 
 class TestLaunchEditor:
     def test_gui_editor(self, popen, example_file):
@@ -427,6 +431,33 @@ class TestLaunchEditor:
             f"{example_file}:12:1",
         ]
         assert le._terminal_editor is None
+
+    def test_no_terminal_skips_launch_editor_env(
+        self, popen, example_file, monkeypatch, no_running_editor
+    ):
+        monkeypatch.setenv("LAUNCH_EDITOR", "vim")
+        monkeypatch.setenv("VISUAL", "gedit")
+
+        launch_editor(example_file, 12, 5, terminal=False)
+
+        # gedit is not a supported editor, so gets no position, rather than
+        # the separate arguments meant for a LAUNCH_EDITOR script.
+        assert popen.call_args.args[0] == [
+            shutil.which("gedit") or "gedit",
+            str(example_file),
+        ]
+
+    def test_explicit_editor_with_launch_editor_env(
+        self, popen, example_file, monkeypatch
+    ):
+        monkeypatch.setenv("LAUNCH_EDITOR", "my-script")
+
+        launch_editor(example_file, 12, 5, editor="gedit")
+
+        assert popen.call_args.args[0] == [
+            shutil.which("gedit") or "gedit",
+            str(example_file),
+        ]
 
     def test_no_terminal_no_editor(
         self, popen, example_file, monkeypatch, no_running_editor
