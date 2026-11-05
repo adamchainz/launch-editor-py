@@ -2,8 +2,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+1.1.0 (2026-11-05)
+------------------
 
 * Add ``terminal`` argument to ``launch_editor()`` and ``guess_editor()``.
   Pass ``terminal=False`` to skip terminal editors, such as Vim, when they would take over the terminal of a web server.
