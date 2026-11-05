@@ -10,6 +10,10 @@ Unreleased
 
   `PR #4 <https://github.com/adamchainz/launch-editor-py/pull/4>`__.
 
+* Only pass the line and column as separate arguments to the ``LAUNCH_EDITOR`` command, not to other editors chosen while it’s set.
+
+  `PR #5 <https://github.com/adamchainz/launch-editor-py/pull/5>`__.
+
 1.0.0 (2026-10-29)
 ------------------
 

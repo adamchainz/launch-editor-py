@@ -401,7 +401,9 @@ def position_args(
     if name in _JETBRAINS_EDITORS:
         return ["--line", str(line), "--column", str(column), filename]
 
-    if os.environ.get("LAUNCH_EDITOR"):
+    # LAUNCH_EDITOR may name a script that takes the position as separate
+    # arguments, but only if it was picked, rather than skipped or overridden.
+    if editor == os.environ.get("LAUNCH_EDITOR"):
         return [filename, str(line), str(column)]
 
     # For other editors, drop the position, since passing it incorrectly can
