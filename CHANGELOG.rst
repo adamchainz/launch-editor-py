@@ -2,6 +2,14 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+* Lazily import dependencies on Python 3.15+.
+  This reduces the import time by about 4ms / 20%.
+
+  `PR #7 <https://github.com/adamchainz/launch-editor-py/pull/7>`__.
+
 1.1.0 (2026-11-05)
 ------------------
 
