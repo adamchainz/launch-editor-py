@@ -2,8 +2,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+1.2.0 (2026-11-08)
+------------------
 
 * Lazily import dependencies on Python 3.15+.
   This reduces the import time by about 4ms / 20%.
