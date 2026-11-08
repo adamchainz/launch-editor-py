@@ -16,7 +16,20 @@ Released under the MIT License, see the LICENSE file.
 
 from __future__ import annotations
 
-import functools
+__lazy_modules__ = [
+    "functools",
+    "ntpath",
+    "os",
+    "platform",
+    "re",
+    "shlex",
+    "shutil",
+    "subprocess",
+    "sys",
+    "collections.abc",
+    "pathlib",
+]
+
 import logging
 import ntpath
 import os
@@ -28,6 +41,7 @@ import subprocess
 import sys
 import threading
 from collections.abc import Generator, Sequence
+from functools import partial
 from pathlib import Path, PureWindowsPath
 
 __all__ = [
@@ -267,7 +281,7 @@ def _guess_running_editor(*, terminal: bool = True) -> str | None:
     elif sys.platform == "linux":
         args = ["ps", "x", "--no-heading", "-o", "comm", "--sort=comm"]
         # Only the Linux list includes terminal editors.
-        parse = functools.partial(_editor_from_linux_processes, terminal=terminal)
+        parse = partial(_editor_from_linux_processes, terminal=terminal)
     else:
         return None
 
