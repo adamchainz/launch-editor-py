@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import functools
 import logging
-import ntpath
 import os
 import platform
 import re
@@ -440,7 +439,7 @@ def launch_editor(
 
     filename = os.fspath(filename)
 
-    if sys.platform == "win32" and ntpath.abspath(filename).startswith("\\\\"):
+    if sys.platform == "win32" and os.path.abspath(filename).startswith("\\\\"):
         raise LaunchEditorError(
             f"Cannot open {filename}: UNC paths are not supported on Windows to "
             + "avoid security issues. See "
